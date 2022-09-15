@@ -1,0 +1,86 @@
+---
+name: Python Test
+permissions:
+  id-token: write
+  contents: write
+on:
+  pull_request:
+    branches:
+      - '**'
+    paths:
+      - .github/workflows/python.yml
+      - Terraform/modules/pre-envs-global/Lambdas/**
+      - .pylintrc
+      - .flake8
+  # push:
+  #   branches:
+  #     - "**"
+  #   paths:
+  #     - ".github/workflows/python.yml"
+  #     - "Terraform/modules/pre-envs-global/Lambdas/**"
+  #     - .pylintrc
+  #     - .flake8
+
+jobs:
+  validate:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        lambda:
+          - Terraform/modules/pre-envs-global/Lambdas/aws-ips-update_CLOUDFRONT
+          - Terraform/modules/pre-envs-global/Lambdas/aws-ips-update_REGIONAL
+          - Terraform/modules/pre-envs-global/Lambdas/env_start
+          - Terraform/modules/pre-envs-global/Lambdas/env_stop
+          - Terraform/modules/pre-envs-global/Lambdas/company-ips-change
+          - Terraform/modules/pre-envs-global/Lambdas/newrelic-ips-update
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+        with:
+          python-version: 3.9.1     # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          architecture: x64     # optional x64 or x86. Defaults to x64 if not specified
+        # - name: Configure AWS credentials
+        #   uses: aws-actions/configure-aws-credentials@master
+        #   with:
+        #     role-to-assume: arn:aws:iam::1122:role/app-tf-apply
+        #     aws-region: us-east-1
+        #     role-duration-seconds: 18000
+
+      - name: Python Setup
+        id: python-setup
+        run: |
+          python -m pip install flake8 pylint pytest
+          if [ -f ./${{ matrix.lambda }}/requirements.txt ]; then
+            python -m pip install -r ./${{ matrix.lambda }}/requirements.txt
+          fi
+
+        # - name: PyTest check
+        #   id: pytest-check
+        #   run: |
+        #     if [ -d ./${{ matrix.lambda }}/python_packages ]; then
+        #       cd ./${{ matrix.lambda }}/python_packages
+        #       pytest ./*.py
+        #     else
+        #       cd ./${{ matrix.lambda }}
+        #       pytest ./*.py
+        #     fi
+
+      - name: Python flake8 check
+        id: python-flake8
+        run: |
+          if [ -d ./${{ matrix.lambda }}/python_packages ]; then
+            flake8 ${{ matrix.lambda }}/python_packages/*.py
+          else
+            flake8 ${{ matrix.lambda }}/*.py
+          fi
+
+      - name: Python Lint
+        id: python-lint
+        run: |
+          if [ -d ./${{ matrix.lambda }}/python_packages ]; then
+            pylint --rcfile ./.pylintrc ${{ matrix.lambda }}/python_packages/*.py
+          else
+            pylint --rcfile ./.pylintrc ${{ matrix.lambda }}/*.py
+          fi

@@ -1,0 +1,83 @@
+---
+name: Packer Test
+permissions:
+  id-token: write
+  contents: write
+on:
+  pull_request:
+    branches:
+      - '**'
+    paths:
+      - .github/workflows/packer.yml
+      - Packer/**
+  # push:
+  #   branches:
+  #     - '**'
+  #   paths:
+  #     - '.github/workflows/packer.yml'
+  #     - 'Packer/**'
+
+jobs:
+  packer:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - forms
+          - trainer
+        app_version:
+          - 30.0.15
+          - 32.0.17
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@master
+        with:
+          role-to-assume: arn:aws:iam::112233:role/app-packer-build
+          aws-region: us-east-1
+          role-duration-seconds: 18000
+      - name: packer-fmt
+        id: packer-fmt
+        uses: hashicorp/packer-github-actions@master
+        with:
+          command: fmt
+          arguments: -check
+          working_directory: ./Packer
+          target: .
+      - name: packer-init
+        id: packer-init
+        uses: hashicorp/packer-github-actions@master
+        with:
+          command: init
+          working_directory: ./Packer
+          target: .
+      - name: packer-validate
+        id: packer-validate
+        uses: hashicorp/packer-github-actions@master
+        with:
+          command: validate
+          working_directory: ./Packer
+          arguments: -syntax-only -var-file=./variables.pkrvars.hcl
+          target: .
+        # - name: aws-ssm-install
+        #   id: aws-ssm-install
+        #   run: |
+        #     set -x
+        #     id
+        #     curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
+        #     sudo dpkg -i session-manager-plugin.deb
+        #     session-manager-plugin
+        #     echo $PATH
+        # - name: packer-build
+        #   id: packer-build
+        #   run: |
+        #     set -x
+
+        #     cd ./Packer
+        #     echo $PATH
+        #     packer init .
+        #     packer build -color=false -var-file=./variables.pkrvars.hcl -on-error=abort .
+        #   env:
+        #     PKR_VAR_app_version: ${{ matrix.app_version }}
+        #     PKR_VAR_component: ${{ matrix.component }}

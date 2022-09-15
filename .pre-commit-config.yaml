@@ -1,0 +1,133 @@
+---
+default_language_version:
+  python: python3.9
+fail_fast: true
+exclude: |
+    (?x)^(
+      ^Test/.*$|
+      ^Tools/.*$
+    )$
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.3.0
+    hooks:
+      - id: check-yaml
+        files: ^.*\.(yaml|yml)$
+      - id: detect-private-key
+      - id: check-added-large-files
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+        exclude: ^.*\.tftpl$
+      - id: check-json
+        files: ^.*\.json$
+        exclude: ^Terraform/modules/pre-envs-global/Lambdas/.*/response.json$
+      - id: check-merge-conflict
+      - id: detect-aws-credentials
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      # -   id: trailing-whitespace
+      # -   id: end-of-file-fixer
+
+  - repo: https://github.com/jumanjihouse/pre-commit-hooks
+    rev: 2.1.6  # or other specific tag
+    hooks:
+      - id: shellcheck
+        exclude: |
+            (?x)^(
+              ^Terraform/components/ec2-image-builder/Ansible/playbooks/roles/.*/update_permission_content_type.py.sh|
+              ^Terraform/components/ec2-image-builder/Ansible/playbooks/roles/.*/diagnostics.*\.bash |
+              ^Terraform/modules/Splunk/templates/user-data_splunk_backup.sh
+            )$
+      # args:
+      #   -  --exclude=SC1091
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.26.3
+    hooks:
+      - id: yamllint
+        types: [file, yaml]
+        exclude: ^Insomnia/
+        args:
+          - -c=./.yamllint.yaml
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.73.0
+    hooks:
+      - id: terraform_fmt
+        files: ^Terraform/
+      - id: terraform_tflint
+        files: ^Terraform/.*(\.tf|\.tfvars)$
+        exclude: \.terraform\/.*$
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/Terraform/.tflint.hcl
+          - --args=--no-color
+      - id: terraform_tfsec
+        files: ^Terraform/
+        args:
+          - --args=--config-file=__GIT_WORKING_DIR__/Terraform/tfsec.yml
+      - id: terraform_checkov
+        verbose: true
+        # exclude: ^Test\/
+        # files: ^Terraform\/
+        args:
+          - --args=--config-file=__GIT_WORKING_DIR__/.checkov.yaml
+          - --args=--skip-path Test
+
+  # - repo: https://github.com/ansible-community/ansible-lint
+  #   rev: v6.3.0
+  #   hooks:
+  #     - id: ansible-lint
+  #       types: [file, yaml]
+  #       exclude: ^Insomnia/
+  #       files: ^Terraform/components/ec2-image-builder/Ansible/playbooks/.*\.yaml$
+  #       # args:
+  #       # - -c
+  #       # - ./Terraform/components/ec2-image-builder/Ansible/playbooks/.ansible-lint
+
+  - repo: local
+    hooks:
+      - id: ansible-lint
+        name: check ansible playbooks
+        language: system
+        entry: ansible-lint -c ./Terraform/components/ec2-image-builder/Ansible/playbooks/.ansible-lint
+        files: ^Terraform/components/ec2-image-builder/Ansible/playbooks/.*\.yaml$
+        # exclude: ^Terraform/components/ec2-image-builder/Ansible/playbooks/.*\.yaml$
+        exclude: |
+            (?x)^(
+              ^Terraform/components/ec2-image-builder/Ansible/playbooks/inventory/.*$ |
+              ^Terraform/components/ec2-image-builder/Ansible/playbooks/roles/.*$
+            )$
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 4.0.1
+    hooks:
+      - id: flake8
+        files: ^.*\.py$
+        args: [--config=./.flake8]
+
+  - repo: https://github.com/PyCQA/pylint
+    rev: v2.14.4
+    hooks:
+      - id: pylint
+        additional_dependencies:
+          - boto3==1.17.7
+          - botocore==1.20.7
+          - requests==2.25.1
+        files: ^.*\.py$
+        args: [-rn, -sn, --rcfile=./.pylintrc, --fail-on=I]
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.19.0
+    hooks:
+      - id: eslint
+        types: [file, javascript]
+
+  - repo: https://github.com/zricethezav/gitleaks
+    rev: v8.8.11
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.31.1
+    hooks:
+      - id: markdownlint

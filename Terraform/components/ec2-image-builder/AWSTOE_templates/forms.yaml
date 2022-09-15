@@ -1,0 +1,93 @@
+---
+name: appForms
+schemaVersion: '1.0'
+description: app Forms
+parameters:
+  - AnsibleS3:
+      type: string
+      default: ${ANSIBLE_S3}
+      description: S3 path to Ansible playbook
+  - AppVersion:
+      type: string
+      default: ${APP_VERSION}
+      description: app App Version
+  - AWS_Region:
+      type: string
+      default: ${AWS_REGION}
+      description: AWS Region
+phases:
+  - name: build
+    steps:
+      - name: Prepare
+        action: ExecuteBash
+        timeoutSeconds: 300
+        onFailure: Abort
+        maxAttempts: 3
+        inputs:
+          commands:
+            - |
+              #!/usr/bin/env bash
+              set -x
+              set -e
+              exec 2>&1
+
+              systemctl stop mdatp
+
+      - name: CreatingFolderAnsible
+        action: CreateFolder
+        inputs:
+          - path: /tmp/AnsiblePlaybook/
+
+      - name: DownloadAnsiblePlaybook
+        action: S3Download
+        timeoutSeconds: 60
+        onFailure: Abort
+        maxAttempts: 3
+        inputs:
+          - source: '{{ AnsibleS3 }}'
+            destination: /tmp/ansible.zip
+
+      - name: RunAnsible
+        action: ExecuteBash
+        timeoutSeconds: 900
+        onFailure: Abort
+        maxAttempts: 1
+        inputs:
+          commands:
+            - |
+              #!/usr/bin/env bash
+              set -x
+              set -e
+              exec 2>&1
+
+              unzip {{ build.DownloadAnsiblePlaybook.inputs[0].destination }} -d /tmp/AnsiblePlaybook
+              cd /tmp/AnsiblePlaybook
+
+              python3 -m pip install -r ./requirements.txt
+              ansible-playbook --version
+
+              ansible-galaxy collection install -r ./collections/requirements.yml
+
+              ansible-playbook -c local -i "127.0.0.1," --extra-vars app_version={{ AppVersion }} ./playbooks/forms.yaml
+
+  - name: validate
+    steps:
+      - name: CheckDockerImages
+        action: ExecuteBash
+        timeoutSeconds: 60
+        onFailure: Abort
+        maxAttempts: 3
+        inputs:
+          commands:
+            - |
+              #!/usr/bin/env bash
+              set -x
+              set -e
+              exec 2>&1
+
+              aws --version | grep "aws-cli/2"
+
+              systemctl is-active snap.amazon-ssm-agent.amazon-ssm-agent.service
+              systemctl is-enabled snap.amazon-ssm-agent.amazon-ssm-agent.service
+
+              docker image inspect forms:{{ AppVersion }} | grep Container

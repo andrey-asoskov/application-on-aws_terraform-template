@@ -1,0 +1,6 @@
+---
+- name: Microsoft Defender is stopped but enabled
+  ansible.builtin.service:
+    name: mdatp
+    state: stopped
+    enabled: true

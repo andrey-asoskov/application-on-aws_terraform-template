@@ -1,0 +1,13 @@
+bundles:
+  - general
+  - python
+  - terraform
+  - javascript
+report:
+  pullRequest:
+    findings: "onAllFiles" #"onChangedLinesOnly"
+    comment: true
+notifications:
+  slack:
+    enabled: false
+useGitClone: false

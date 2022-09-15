@@ -1,0 +1,22 @@
+{
+  "Records": [
+    {
+      "EventSource": "aws:sns",
+      "EventVersion": "1.0",
+      "EventSubscriptionArn": "arn:aws:sns:us-east-1:933806036560:ipwl_update:ea571684-6d28-4880-8280-a9046dbf3fbc",
+      "Sns": {
+        "Type": "Notification",
+        "MessageId": "bc6ab8e8-39b8-5455-9b80-eebf3542664e",
+        "TopicArn": "arn:aws:sns:us-east-1:933806036560:ipwl_update",
+        "Subject": "company External IPs update",
+        "Message": "{\"eventtype\": \"update\", \"eventdata\": {\"version\": 1, \"context\": \"company-external-ips\", \"resource\": \"s3://ndm-repo-shared-data/external-ips/offices-and-vpn/company-external-ips.json\"}}",
+        "Timestamp": "2019-11-26T11:21:30.597Z",
+        "SignatureVersion": "1",
+        "Signature": "jSXpNtg4Ny9KEnUGrQnaSDNbdJgQiTBAaA9WzJZcrcsvPTfcvGkGDZJccf7AB7U6ipwqDODXeFejIpQ9cnJiJBa9fMUB2bjGLxqK7mNnJf9D7BRdxgVhG7UvKtxWwzltA3rKfsPdF78Ol1SguQkfMuJDvAzBUB90S/UUkyn9kOLFueAvGzNwa/Exji4qdFao2OG3GeDr/eSjinWRERtI9/X2BVFl9j1ZVtV82XRpT/OqU/Fm7gagIy/wY1Dr8ZBIJJV6ReDCo/P3oglghrr6fed3ruTUBWR2e5xvQQtpOzEh8LSHX8eWfrIX15OoZFWIPL74MFsNvJ8gAzxbInsOeg==",
+        "SigningCertUrl": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-6aad65c2f9911b05cd53efda11f913f9.pem",
+        "UnsubscribeUrl": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:933806036560:ipwl_update:ea571684-6d28-4880-8280-a9046dbf3fbc",
+        "MessageAttributes": {}
+      }
+    }
+  ]
+}

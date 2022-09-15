@@ -1,0 +1,62 @@
+---
+name: Ansible Test
+on:
+  pull_request:
+    branches:
+      - "**"
+    paths:
+      - ".github/workflows/ansible.yml"
+      - "Terraform/components/ec2-image-builder/Ansible/**"
+  # push:
+  #   branches:
+  #     - '**'
+  #   paths:
+  #     - '.github/workflows/ansible.yml'
+  #     - 'Terraform/components/ec2-image-builder/Ansible/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        playbook:
+          - forms.yaml
+          - trainer.yaml
+          - collect_logs.yaml
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+        with:
+          python-version: "3.9.1"  # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          architecture: "x64"  # optional x64 or x86. Defaults to x64 if not specified
+          platform: "linux"
+      - name: Ansible Setup
+        id: ansible-setup
+        run: |
+          cd ./Terraform/components/ec2-image-builder/Ansible
+          python -m pip install -r ./requirements.txt
+          #ansible --version
+          export ANSIBLE_COLLECTIONS_PATHS=./collections
+          #ansible-galaxy collection install -r collections/requirements.yml -p ~/collections
+          ansible-galaxy collection download -p ./collections community.general:4.2.0
+          ansible-galaxy collection download -p ./collections ansible.posix:1.3.0
+          ansible-galaxy collection download -p ./collections amazon.aws:2.1.0
+          ansible-galaxy collection download -p ./collections community.docker:2.0.2
+          mkdir -p ./collections/ansible_collections/community/general
+          mkdir -p ./collections/ansible_collections/ansible/posix
+          mkdir -p ./collections/ansible_collections/amazon/aws
+          mkdir -p ./collections/ansible_collections/community/docker
+
+          tar xzvf ./collections/community-general-4.2.0.tar.gz -C ./collections/ansible_collections/community/general
+          tar xzvf ./collections/ansible-posix-1.3.0.tar.gz -C ./collections/ansible_collections/ansible/posix
+          tar xzvf ./collections/amazon-aws-2.1.0.tar.gz -C ./collections/ansible_collections/amazon/aws
+          tar xzvf ./collections/community-docker-2.0.2.tar.gz -C ./collections/ansible_collections/community/docker
+
+      - name: Ansible Lint
+        id: ansible-lint
+        run: |
+          cd ./Terraform/components/ec2-image-builder/Ansible
+          export ANSIBLE_COLLECTIONS_PATHS=./collections
+          #ansible --version
+          ansible-lint -c ./playbooks/.ansible-lint ./playbooks/${{ matrix.playbook }}.yaml

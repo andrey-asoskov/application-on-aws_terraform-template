@@ -1,0 +1,59 @@
+---
+- name: Include pre-deploy vars
+  ansible.builtin.include_vars: pre-deploy.yml
+
+- name: Install boto3 pip package
+  ansible.builtin.pip:
+    name: boto3==1.21.43
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver | regex_replace('.[0-99]$') }}
+  tags:
+    - python
+
+- name: Install docker pip package
+  ansible.builtin.pip:
+    name: docker==5.0.3
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver | regex_replace('.[0-99]$') }}
+  tags:
+    - python
+
+- name: Check if App's code is already downloaded.
+  ansible.builtin.stat:
+    path: /opt/app-trainer-{{ app_version }}.tgz
+  register: appcode_downloaded
+
+- name: Download App
+  aws_s3:
+    bucket: '{{ s3.appcode_s3bucket }}'
+    object: App/app-trainer-{{ app_version }}.tgz
+    dest: /opt/app-trainer-{{ app_version }}.tgz
+    mode: get
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver | regex_replace('.[0-99]$') }}
+  when: not appcode_downloaded.stat.exists
+
+- name: Create a directory (/opt/hs) if it does not exist
+  ansible.builtin.file:
+    path: /opt/hs
+    state: directory
+    mode: '0755'
+
+- name: Check if App's code is already installed.
+  ansible.builtin.stat:
+    path: /opt/hs/app-trainer-{{ app_version }}
+  register: appcode_installed
+
+- name: Unarchive the app
+  ansible.builtin.unarchive:
+    src: /opt/app-trainer-{{ app_version }}.tgz
+    dest: /opt/hs
+    owner: root
+    group: root
+    remote_src: true
+  when: not appcode_installed.stat.exists
+
+- name: Delete /opt/app-trainer-{{ app_version }}.tgz
+  ansible.builtin.file:
+    state: absent
+    path: /opt/app-trainer-{{ app_version }}.tgz

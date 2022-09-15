@@ -1,0 +1,5 @@
+aws_region     = "us-east-1"
+solution       = "application"
+solution_short = "app"
+product_id     = "13460"
+env            = "dev"

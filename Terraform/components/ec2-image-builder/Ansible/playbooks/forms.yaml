@@ -1,0 +1,16 @@
+---
+- hosts: all
+  vars:
+    app_component: forms
+    python_ver: 3.10.4
+    python_install_ubuntu: apt
+  roles:
+    - stop_mdatp
+    - setup_disks
+    - install_awscli2
+    - update_packages
+    - install_docker
+    - install_python
+    - install_postgresql_client
+    - install_app
+  become: true

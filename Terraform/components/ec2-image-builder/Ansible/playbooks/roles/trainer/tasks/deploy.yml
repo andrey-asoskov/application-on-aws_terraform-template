@@ -1,0 +1,117 @@
+---
+- name: Include deploy vars
+  ansible.builtin.include_vars: deploy.yml
+
+- name: Unlink .env
+  ansible.builtin.file:
+    state: absent
+    path: /opt/hs/app-trainer-{{ app_version }}/.env
+
+- name: Create empty .env
+  ansible.builtin.copy:
+    content: ''
+    dest: /opt/hs/app-trainer-{{ app_version }}/.env
+    force: true
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Create stop containers script
+  ansible.builtin.copy:
+    src: stop_containers.sh
+    dest: /opt/hs/app-trainer-{{ app_version }}/stop_containers.sh
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create start containers script
+  ansible.builtin.copy:
+    src: start_containers.sh
+    dest: /opt/hs/app-trainer-{{ app_version }}/start_containers.sh
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create diagnostics script
+  ansible.builtin.copy:
+    src: diagnostics.bash
+    dest: /opt/hs/app-trainer-{{ app_version }}/diagnostics2.bash
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Load Trainer image from archive
+  community.docker.docker_image:
+    name: trainer
+    tag: '{{ app_version }}'
+    push: false
+    load_path: /opt/hs/app-trainer-{{ app_version }}/trainer-{{ app_version }}/trainer.tar
+    source: load
+    timeout: 300
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver }}
+
+- name: Load Postgres image from archive
+  community.docker.docker_image:
+    name: postgres
+    tag: '{{ app_version }}'
+    push: false
+    load_path: /opt/hs/app-trainer-{{ app_version }}/postgres.tar
+    source: load
+    timeout: 300
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver }}
+
+- name: Test mount points
+  ansible.builtin.shell: mount  # noqa command-instead-of-shell command-instead-of-module no-changed-when
+  register: mount_points_list
+
+- name: Display list of mount points
+  ansible.builtin.debug: var=mount_points_list.stdout_lines
+
+- name: Test docker image load
+  ansible.builtin.shell: docker image list  # noqa command-instead-of-shell no-changed-when
+  register: docker_image_list
+
+- name: Display list of docker images
+  ansible.builtin.debug: var=docker_image_list.stdout_lines
+
+# To fix issue with 30.0.2 release
+- name: Create a directory (/mnt/hs/input)
+  ansible.builtin.file:
+    path: /mnt/hs/input
+    state: directory
+    mode: '0755'
+    owner: '1000'
+    group: '1000'
+  tags:
+    - fix
+  when: app_version is version('30.0.2', '>')
+
+- name: Create a directory (/mnt/hs/sdm_blocks)
+  ansible.builtin.file:
+    path: /mnt/hs/sdm_blocks
+    state: directory
+    mode: '0755'
+    owner: '1000'
+    group: '1000'
+  tags:
+    - fix
+  when: app_version is version('30.0.2', '>')
+
+- name: Put envs into .env
+  ansible.builtin.copy:
+    content: |
+      HS_SDM_BLOCKS_PATH=/mnt/hs/sdm_blocks
+      FS_INPUT_PATH=/mnt/hs/input
+    dest: /opt/hs/app-trainer-{{ app_version }}/.env
+    force: true
+    owner: root
+    group: root
+    mode: 0644
+  tags:
+    - fix
+  when: app_version is version('30.0.2', '>')

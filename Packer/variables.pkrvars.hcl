@@ -1,0 +1,12 @@
+aws_instance_type             = "c6i.4xlarge"
+aws_subnet_id                 = "subnet-09ce50d3fc96cb488" #Private
+aws_vpc_id                    = "vpc-06d79efae71e36a2e"    #Dev
+aws_security_group_id         = "sg-0378d720d099b9682"     #app-dev-App_Forms
+aws_iam_instance_profile_name = "ec2_image_builder_role"
+aws_kms_key_id                = "982c1a7a-133e-4ffe-8024-0f28f8b74707" #app-dev
+aws_region                    = "us-east-1"
+solution                      = "app"
+solution_short                = "app"
+product_id                    = "13460"
+env                           = "dev"
+env_type                      = "npn"

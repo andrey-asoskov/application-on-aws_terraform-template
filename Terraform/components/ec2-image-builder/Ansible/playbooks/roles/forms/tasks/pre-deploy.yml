@@ -1,0 +1,116 @@
+---
+- name: Include pre-deploy vars
+  ansible.builtin.include_vars: pre-deploy.yml
+
+- name: Create a new primary partition
+  community.general.parted:
+    device: /dev/nvme1n1
+    number: 1
+    state: present
+  when: partition_is_created is undefined and ansible_hostname  != "vagrant"
+  register: partition_is_created
+
+- name: Create a xfs filesystem on /dev/nvme1n1p1
+  community.general.filesystem:
+    fstype: xfs
+    dev: /dev/nvme1n1p1
+  when: fs_is_created is undefined and ansible_hostname  != "vagrant"
+  register: fs_is_created
+
+- name: Create a directory (/var/lib/docker) if it does not exist
+  ansible.builtin.file:
+    path: /var/lib/docker
+    state: directory
+    mode: '0755'
+
+- name: Get UUID of secondary disk drive  # noqa no-changed-when
+  ansible.builtin.shell: set -o pipefail && lsblk -lp -o UUID,NAME,MOUNTPOINT | grep '/dev/nvme1n1p1' | awk '{print $1}'
+  args:
+    executable: /usr/bin/bash
+  register: shell1
+
+- name: Show shell output
+  ansible.builtin.debug:
+    var: shell1.stdout
+
+- name: Mount secondary disk
+  ansible.posix.mount:
+    path: /var/lib/docker
+    src: UUID={{ shell1.stdout }}
+    fstype: xfs
+    boot: true
+    state: mounted
+  tags:
+    - mount
+
+- name: Get /etc/fstab
+  ansible.builtin.shell: cat /etc/fstab  # noqa command-instead-of-shell no-changed-when
+  register: shell2
+
+- name: Show /etc/fstab
+  ansible.builtin.debug:
+    var: shell2.stdout_lines
+
+- name: Create a directory (/mnt/hs/media)
+  ansible.builtin.file:
+    path: /mnt/hs/media
+    state: directory
+    mode: '0755'
+    owner: '1000'
+    group: '1000'
+
+- name: Check if App's code is already downloaded.
+  ansible.builtin.stat:
+    path: /tmp/app-trainer-{{ app_version }}.tgz
+  register: appcode_downloaded
+
+- name: Install boto3 pip package
+  ansible.builtin.pip:
+    name: boto3==1.21.43
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver }}
+  tags:
+    - python
+
+- name: Install docker pip package
+  ansible.builtin.pip:
+    name: docker==5.0.3
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver }}
+  tags:
+    - python
+
+- name: Download App
+  aws_s3:
+    bucket: '{{ s3.appcode_s3bucket }}'
+    object: App/app-trainer-{{ app_version }}.tgz
+    dest: /tmp/app-trainer-{{ app_version }}.tgz
+    mode: get
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver }}
+  when: not appcode_installed.stat.exists
+
+- name: Create a directory (/opt/hs) if it does not exist
+  ansible.builtin.file:
+    path: /opt/hs
+    state: directory
+    mode: '0755'
+
+- name: Check if App's code is already installed.
+  ansible.builtin.stat:
+    path: /opt/hs/app-trainer-{{ app_version }}
+  register: appcode_installed
+
+- name: Unarchive the app
+  ansible.builtin.unarchive:
+    src: /tmp/app-trainer-{{ app_version }}.tgz
+    dest: /opt/hs
+    owner: root
+    group: root
+    remote_src: true
+  when: not appcode_installed.stat.exists
+
+- name: Delete /tmp/app-trainer-{{ app_version }}.tgz
+  ansible.builtin.file:
+    state: absent
+    path: /tmp/app-trainer-{{ app_version }}.tgz

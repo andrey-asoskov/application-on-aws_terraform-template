@@ -1,0 +1,7 @@
+---
+- name: Include main vars
+  ansible.builtin.include_vars: main.yml
+- name: Pre-deploy tasks
+  ansible.builtin.import_tasks: pre-deploy.yml
+- name: Deploy tasks
+  ansible.builtin.import_tasks: deploy.yml

@@ -1,0 +1,129 @@
+---
+- name: Include deploy vars
+  ansible.builtin.include_vars: deploy.yml
+
+- name: Unlink .env
+  ansible.builtin.file:
+    state: absent
+    path: /opt/hs/app-trainer-{{ app_version }}/.env
+
+- name: Create empty .env (trainer)
+  ansible.builtin.copy:
+    content: ''
+    dest: /opt/hs/app-trainer-{{ app_version }}/.env
+    force: true
+    owner: root
+    group: root
+    mode: 0644
+  when: app_component == "trainer"
+
+# - name: Put envs into .env (trainer)
+#  copy:
+#    content: |
+#      HS_SDM_BLOCKS_PATH=/mnt/hs/sdm_blocks
+#      FS_INPUT_PATH=/mnt/hs/input
+#    dest: "/opt/hs/app-trainer-{{ app_version }}/.env"
+#  when: app_component == "trainer"
+#  tags:
+#    - fix
+
+- name: Create stop containers script
+  ansible.builtin.copy:
+    src: stop_containers.sh
+    dest: /opt/hs/app-trainer-{{ app_version }}/stop_containers.sh
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create start containers script
+  ansible.builtin.copy:
+    src: start_containers.sh
+    dest: /opt/hs/app-trainer-{{ app_version }}/start_containers.sh
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create update permissions script
+  ansible.builtin.copy:
+    src: update_permission_content_type.py.sh
+    dest: /opt/hs/app-trainer-{{ app_version }}/update_permission_content_type.py.sh
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+  when: app_component == "forms"
+
+- name: Create diagnostics script
+  ansible.builtin.copy:
+    src: diagnostics.bash
+    dest: /opt/hs/app-trainer-{{ app_version }}/diagnostics2.bash
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create a directory (/opt/hs/*/certs)
+  ansible.builtin.file:
+    path: /mnt/hs/certs/
+    state: directory
+    mode: '0755'
+  when: app_component == "forms"
+
+- name: Create SSL cert for RDS
+  ansible.builtin.copy:
+    src: SSL_RDS/global-bundle.pem
+    dest: /mnt/hs/certs/global-bundle.pem
+    force: true
+    owner: root
+    group: root
+    mode: 0644
+  when: app_component == "forms"
+
+- name: Load Forms image from archive (forms)
+  community.docker.docker_image:
+    name: forms
+    tag: '{{ app_version }}'
+    push: false
+    load_path: /opt/hs/app-trainer-{{ app_version }}/forms.tar
+    source: load
+    timeout: 600
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver | regex_replace('.[0-99]$') }}
+  tags:
+    - load
+  when: app_component == "forms"
+
+- name: Load Trainer image from archive (trainer)
+  community.docker.docker_image:
+    name: trainer
+    tag: '{{ app_version }}'
+    push: false
+    load_path: /opt/hs/app-trainer-{{ app_version }}/trainer-{{ app_version }}/trainer.tar
+    source: load
+    timeout: 300
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver | regex_replace('.[0-99]$') }}
+  when: app_component == "trainer"
+
+- name: Load Postgres image from archive (trainer)
+  community.docker.docker_image:
+    name: postgres
+    tag: '{{ app_version }}'
+    push: false
+    load_path: /opt/hs/app-trainer-{{ app_version }}/postgres.tar
+    source: load
+    timeout: 300
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver | regex_replace('.[0-99]$') }}
+  when: app_component == "trainer"
+
+# - name: Test docker image load # noqa command-instead-of-shell
+#   ansible.builtin.shell: docker image list
+#   changed_when: false
+#   register: docker_image_list
+#
+# - name: Display list of docker images
+#   ansible.builtin.debug:
+#     var: docker_image_list.stdout_lines

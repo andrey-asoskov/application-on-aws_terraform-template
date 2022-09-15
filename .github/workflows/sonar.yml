@@ -1,0 +1,161 @@
+---
+name: Sonar Test
+on:
+  pull_request:
+    branches:
+      - '**'
+    paths:
+      - .github/workflows/sonar.yml
+      - Terraform/modules/pre-envs-global/Lambdas/**
+      - Terraform/modules/new-relic-synthetic/new-relic-checks/**
+
+    # push:
+    #   branches:
+    #     - "**"
+    #   paths:
+    #     - ".github/workflows/sonar.yml"
+    #     - "Terraform/modules/pre-envs-global/Lambdas/**"
+    #     - "Terraform/modules/new-relic-synthetic/new-relic-checks/**"
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  # sonar_scan_lambda:
+  #   # The type of runner that the job will run on
+  #   runs-on: [linux, scas]
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       lambda:
+  #         - Terraform/modules/pre-envs-global/Lambdas/aws-ips-update_CLOUDFRONT
+  #         - Terraform/modules/pre-envs-global/Lambdas/aws-ips-update_REGIONAL
+  #         - Terraform/modules/pre-envs-global/Lambdas/company-ips-change
+  #         - Terraform/modules/pre-envs-global/Lambdas/env_start
+  #         - Terraform/modules/pre-envs-global/Lambdas/env_stop
+  #   env:
+  #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  #     USER: ${{ secrets.ARTIFACTORY_USER }}
+  #     PASS: ${{ secrets.ARTIFACTORY_PASS }}
+  #     team: app
+  #   # Steps represent a sequence of tasks that will be executed as part of the job
+  #   steps:
+  #     - name: Checkout Code
+  #       uses: actions/checkout@master
+  #     - name: Docker Login
+  #       run: docker login -u $USER -p $PASS company-docker.jfrog.io
+
+  #     - name: Test
+  #       run: |
+  #         docker run -i --user=`id -u` --rm -e USER -e PASS -e ARTIFACTORY_URL=https://company.jfrog.io/artifactory/ \
+  #         -e RESOLVER_URL="https://company.jfrog.io/artifactory/api/pypi/python/simple" \
+  #         -v `pwd`/${{ matrix.lambda }}:/app -w /app \
+  #         company-docker.jfrog.io/build-tools/firm-python:3 "python3 -m pip install -r ./requirements.txt"
+
+  # - name: Sonar Scan
+  #   if: ${{ github.base_ref == null }}
+  #   run: |
+  #     docker run -i --user `id -u` --rm -e SONAR_TOKEN -e SONAR_HOST_URL \
+  #     -v `pwd`/${{ matrix.lambda }}:/app -w /app company-docker.jfrog.io/sonarsource/sonar-scanner-cli:4 \
+  #       -Dsonar.projectKey=app-Company-Internal_app-app_platform_tf \
+  #       -Dsonar.sources=./ \
+  #       -Dsonar.branch.name=`echo "${{ github.ref }}" | cut -b 12-` \
+  #       -Dsonar.qualitygate.wait=false
+  # - name: Sonar Scan on PR
+  #   if: ${{ github.base_ref != null }}
+  #   run: |
+  #     docker run -i --user `id -u` --rm -e SONAR_TOKEN -e SONAR_HOST_URL \
+  #     -v `pwd`/${{ matrix.lambda }}:/app -w /app company-docker.jfrog.io/sonarsource/sonar-scanner-cli:4 \
+  #       -Dsonar.projectKey=app-Company-Internal_app-app_platform_tf \
+  #       -Dsonar.sources=./ \
+  #       -Dsonar.pullrequest.key=${{ github.event.number }} \
+  #       -Dsonar.pullrequest.branch=${{ github.head_ref }} \
+  #       -Dsonar.pullrequest.base=${{ github.base_ref }} \
+  #       -Dsonar.qualitygate.wait=false
+  # - name: Docker Logout
+  #   run: docker logout company-docker.jfrog.io
+
+  sonar_scan_repo:
+    runs-on: [linux, scas]
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      USER: ${{ secrets.ARTIFACTORY_USER }}
+      PASS: ${{ secrets.ARTIFACTORY_PASS }}
+      team: app
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@master
+      - name: Docker Login
+        run: docker login -u $USER -p $PASS company-docker.jfrog.io
+      - name: Sonar Scan whole repo
+        run: |
+          docker run -i --user `id -u` --rm -e SONAR_TOKEN -e SONAR_HOST_URL \
+          -v `pwd`:/app -w /app company-docker.jfrog.io/sonarsource/sonar-scanner-cli:4 \
+            -Dsonar.projectKey=app-Company-Internal_app-app_platform_tf \
+            -Dsonar.sources=./ \
+            -Dsonar.python.version=3.9 \
+            -Dsonar.pullrequest.key=${{ github.event.number }} \
+            -Dsonar.pullrequest.branch=${{ github.head_ref }} \
+            -Dsonar.pullrequest.base=${{ github.base_ref }} \
+            -Dsonar.qualitygate.wait=false
+      - name: Docker Logout
+        run: docker logout company-docker.jfrog.io
+
+  xray_scan_lambda_python:
+    runs-on: [linux, scas]
+    strategy:
+      fail-fast: false
+      matrix:
+        lambda:
+          - Terraform/modules/pre-envs-global/Lambdas/aws-ips-update_CLOUDFRONT
+          - Terraform/modules/pre-envs-global/Lambdas/aws-ips-update_REGIONAL
+          - Terraform/modules/pre-envs-global/Lambdas/company-ips-change
+          - Terraform/modules/pre-envs-global/Lambdas/env_start
+          - Terraform/modules/pre-envs-global/Lambdas/env_stop
+    env:
+      USER: ${{ secrets.ARTIFACTORY_USER }}
+      PASS: ${{ secrets.ARTIFACTORY_PASS }}
+      JF_URL: https://company.jfrog.io/
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+      - name: Docker Login
+        run: docker login -u $USER -p $PASS company-docker.jfrog.io
+      - name: Generate Xray audit report
+        run: |
+          docker run -i --user=`id -u` --rm -e CI=true -e $USER -e $PASS -e RESOLVER_URL="https://company.jfrog.io/artifactory/api/pypi/python/simple" \
+          -v `pwd`/${{ matrix.lambda }}:/app -w /app company-docker.jfrog.io/build-tools/firm-jfrog:2.15 \
+          bash -c "export PIP_INDEX_URL=https://$USER:$PASS@$(echo $RESOLVER_URL | sed 's|.*\//\(.*\)|\1|'); sed -i '1 i\--index-url https://company.jfrog.io/artifactory/api/pypi/python/simple' ./requirements.txt; jf c add OSS-CHECK2 --url $JF_URL --user $USER --password $PASS --interactive=false; jf audit"
+
+      - name: Docker Logout
+        run: docker logout company-docker.jfrog.io
+
+  xray_scan_lambda_nodejs:
+    runs-on: [linux, scas]
+    strategy:
+      fail-fast: false
+      matrix:
+        lambda:
+          - Terraform/modules/new-relic-synthetic/new-relic-checks
+    env:
+      USER: ${{ secrets.ARTIFACTORY_USER }}
+      PASS: ${{ secrets.ARTIFACTORY_PASS }}
+      JF_URL: https://company.jfrog.io/
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+      - name: Docker Login
+        run: docker login -u $USER -p $PASS company-docker.jfrog.io
+        # - name: Test
+        #   run: |
+        #     docker run -i --user=`id -u` --rm -e CI=true -e $USER -e $PASS -e ARTIFACTORY_URL=https://company.jfrog.io/artifactory/ -e RESOLVER_URL="https://company.jfrog.io/artifactory/api/npm/npm" \
+        #     -v `pwd`/${{ matrix.lambda }}:/app -w /app -v /efs/.npm:/home/go/.npm \
+        #     company-docker.jfrog.io/build-tools/firm-npm:12 npm run test
+        # - name: Generate Xray audit report
+        #   run: |
+        #     docker run -i --user=`id -u` --rm -e CI=true -e $USER -e $PASS -e RESOLVER_URL="https://company.jfrog.io/artifactory/api/pypi/python/simple" \
+        #     -v `pwd`/${{ matrix.lambda }}:/app -w /app company-docker.jfrog.io/build-tools/firm-jfrog:2.15 \
+        #     bash -c "export PIP_INDEX_URL=https://$USER:$PASS@$(echo $RESOLVER_URL | sed 's|.*\//\(.*\)|\1|'); sed -i '1 i\--index-url https://company.jfrog.io/artifactory/api/pypi/python/simple' ./requirements.txt; jf c add OSS-CHECK2 --url $JF_URL --user $USER --password $PASS --interactive=false; jf audit"
+
+      - name: Docker Logout
+        run: docker logout company-docker.jfrog.io

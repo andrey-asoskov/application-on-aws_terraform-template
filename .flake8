@@ -1,0 +1,7 @@
+[flake8]
+# it's not a bug that we aren't using all of hacking
+ignore =
+    E111, #Indentation is not a multiple of four
+    E114, #Indentation is not a multiple of four (comment) 
+    E501 #Line too long (82 &gt; 79 characters)
+indent-size = 2

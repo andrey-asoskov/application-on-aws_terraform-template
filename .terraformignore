@@ -1,0 +1,12 @@
+.git/
+.github/
+.guardrails/
+.idea/
+.vscode/
+Documentation/
+git_hooks/
+Insomnia/
+Packer/
+Test/
+Tools/
+Users/

@@ -1,0 +1,13 @@
+[MASTER]
+load-plugins=
+
+[MESSAGES CONTROL]
+disable=bad-indentation,
+		trailing-whitespace,
+		line-too-long,
+		consider-using-sys-exit,
+		bare-except,
+		pointless-string-statement,
+		invalid-name,
+		too-many-locals,
+		duplicate-code

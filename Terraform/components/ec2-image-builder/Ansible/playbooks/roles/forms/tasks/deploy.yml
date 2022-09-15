@@ -1,0 +1,86 @@
+---
+- name: Include deploy vars
+  ansible.builtin.include_vars: deploy.yml
+
+- name: Unlink .env
+  ansible.builtin.file:
+    state: absent
+    path: /opt/hs/app-trainer-{{ app_version }}/.env
+
+- name: Create stop containers script
+  ansible.builtin.copy:
+    src: stop_containers.sh
+    dest: /opt/hs/app-trainer-{{ app_version }}/stop_containers.sh
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create start containers script
+  ansible.builtin.copy:
+    src: start_containers.sh
+    dest: /opt/hs/app-trainer-{{ app_version }}/start_containers.sh
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create update permissions script
+  ansible.builtin.copy:
+    src: update_permission_content_type.py.sh
+    dest: /opt/hs/app-trainer-{{ app_version }}/update_permission_content_type.py.sh
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create diagnostics script
+  ansible.builtin.copy:
+    src: diagnostics.bash
+    dest: /opt/hs/app-trainer-{{ app_version }}/diagnostics2.bash
+    force: true
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create a directory (/opt/hs/*/certs)
+  ansible.builtin.file:
+    path: /mnt/hs/certs/
+    state: directory
+    mode: '0755'
+
+- name: Create SSL cert for RDS
+  ansible.builtin.copy:
+    src: SSL_RDS/global-bundle.pem
+    dest: /mnt/hs/certs/global-bundle.pem
+    force: true
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Load Forms image from archive
+  community.docker.docker_image:
+    name: forms
+    tag: '{{ app_version }}'
+    push: false
+    load_path: /opt/hs/app-trainer-{{ app_version }}/forms.tar
+    source: load
+    timeout: 600
+  vars:
+    ansible_python_interpreter: /usr/bin/python{{ python_ver }}
+  tags:
+    - load
+
+- name: Test mount points
+  ansible.builtin.shell: mount  # noqa command-instead-of-shell command-instead-of-module no-changed-when
+  register: mount_points_list
+
+- name: Display list of mount points
+  ansible.builtin.debug: var=mount_points_list.stdout_lines
+
+- name: Test docker image load
+  ansible.builtin.shell: docker image list  # noqa command-instead-of-shell no-changed-when
+  register: docker_image_list
+
+- name: Display list of docker images
+  ansible.builtin.debug: var=docker_image_list.stdout_lines

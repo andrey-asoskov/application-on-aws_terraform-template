@@ -1,0 +1,154 @@
+#!/bin/bash
+
+TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+
+#Instance ID
+instanceid=`curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id`
+
+#Account ID
+accountid=`curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/identity-credentials/ec2/info| jq -r .AccountId`
+
+#Instance Name
+instancename=`aws ec2 describe-tags --filters "Name=resource-id,Values=$instanceid" "Name=key,Values=Name" --output=text --region ${REGION} | cut -f5`
+
+######### NESSUS CONFIGURATION  ############
+NESSUS_KEY=$(aws kms decrypt --ciphertext-blob "${NESSUS_KEY_CIPHERTEXT}" --output text --query Plaintext --region ${REGION} | base64 -d)
+
+/etc/init.d/nessusagent start
+/opt/nessus_agent/sbin/nessuscli agent link --key=$NESSUS_KEY --groups="$accountid" --cloud
+
+######### NEW RELIC CONFIGURATION  ############
+NEWRELICKEY=$(aws kms decrypt --ciphertext-blob "${NEWRELIC_KEY_CIPHERTEXT}" --output text --query Plaintext --region ${REGION} | base64 -d)
+
+cat >/etc/newrelic-infra.yml <<EOL5
+license_key: $NEWRELICKEY
+display_name: $instancename_$instanceid
+EOL5
+systemctl restart newrelic-infra
+
+######### MICROSOFT DEFENDER CONFIGURATION ############
+accountinstance=ClienTech_$accountid_$instanceid
+
+#systemctl stop msdefender-tag.service
+#systemctl disable msdefender-tag.service
+#mdatp edr tag set --name GROUP --value $accountinstance
+
+mdatp config real-time-protection --value disabled
+# MS Defender create exclusion list
+#mdatp exclusion folder add --path "/opt/"
+mdatp exclusion folder add --path "/var/log/"
+#mdatp exclusion folder add --path "/home/"
+mdatp exclusion folder add --path "/proc/"
+mdatp exclusion folder add --path "/sys/"
+mdatp exclusion folder add --path "/dev/"
+mdatp exclusion process add --name nessusd
+mdatp exclusion process add --name nessus-service
+mdatp exclusion process add --name ssm-agent-worker
+mdatp exclusion process add --name newrelic-infra-service
+mdatp exclusion process add --name newrelic-infra
+mdatp exclusion process add --name splunkd
+
+systemctl start mdatp
+
+########## SPLUNK CONFIGURATION ##############
+FN=$instancename-$instanceid
+
+cat >/opt/splunkforwarder/etc/system/local/inputs.conf <<EOL1
+[default]
+host = $FN
+[monitor:///var/log/messages]
+disabled = false
+sourcetype = syslog
+index = main
+[monitor:///var/log/cloud-init*.log]
+disabled = false
+sourcetype = syslog
+index = main
+#[monitor:///var/log/aws/codedeploy-agent]
+#disabled = true
+#sourcetype = codedeploy
+#index = main
+#[monitor:///var/log/amazon/ssm/amazon-ssm-agent.log]
+#disabled = false
+#sourcetype = ssm
+#index = main
+[monitor:///var/lib/docker/containers/*/*-json.log]
+disabled = false
+sourcetype = _json
+index = main
+EOL1
+
+cat >/opt/splunkforwarder/etc/system/local/outputs.conf <<EOL2
+[tcpout]
+[tcpout:main]
+server = ${splunk_lb}:${splunk_lb_port}
+[tcpout-server: ${splunk_lb}:${splunk_lb_port}]
+EOL2
+
+cat >/opt/splunkforwarder/etc/system/local/props.conf <<EOL4
+[_json]
+pulldown_type = true
+INDEXED_EXTRACTIONS = json
+KV_MODE = none
+TIMESTAMP_FIELDS = time
+TIME_FORMAT = %Y-%m-%dT%H:%M:%S.%9NZ
+TZ = UTC
+#TIME_FORMAT = %m-%d-%Y %H:%M:%S.%l %z
+#2021-08-17T19:22:01.630169328Z
+category = Structured
+description = JavaScript Object Notation format. For more information, visit http://json.org/
+EOL4
+
+cat >/opt/splunkforwarder/etc/system/local/server.conf <<EOL3
+[general]
+serverName = $FN
+EOL3
+
+cd /opt/splunkforwarder/bin
+./splunk stop
+./splunk start --answer-yes --no-prompt --accept-license
+./splunk enable boot-start
+service splunk start
+
+### Log rotation for auditd
+sed -i -e 's/max_log_file_action.*/max_log_file_action = rotate/g'  /etc/audit/auditd.conf
+sed -i -e 's/space_left_action.*/space_left_action = rotate/g'  /etc/audit/auditd.conf
+systemctl restart auditd
+
+########## FORMS CONFIGURATION ##############
+echo "FORMS_STORAGE_MODE=${FORMS_STORAGE_MODE}" > /root/.env
+echo "FILE_STORE_S3_BUCKET=${FILE_STORE_S3_BUCKET}" >> /root/.env
+echo "FILE_STORE_S3_REGION=${FILE_STORE_S3_REGION}" >> /root/.env
+echo "HS_PATH=${HS_PATH}" >> /root/.env
+
+echo "FORMS_DB_TYPE=${FORMS_DB_TYPE}" >> /root/.env
+echo "FORMS_DB_HOST=${FORMS_DB_HOST}" >> /root/.env
+echo "FORMS_DB_PORT=${FORMS_DB_PORT}" >> /root/.env
+echo "FORMS_DB_NAME=${FORMS_DB_NAME}" >> /root/.env
+echo "FORMS_DB_USER=${FORMS_DB_USER}" >> /root/.env
+
+FORMS_DB_PASS=$(aws kms decrypt --ciphertext-blob "${FORMS_DB_PASS_CIPHERTEXT}" --output text --query Plaintext --region ${REGION} | base64 -d)
+echo "FORMS_DB_PASS=$FORMS_DB_PASS" >> /root/.env
+
+echo "FORMS_USER=${FORMS_USER}" >> /root/.env
+
+FORMS_PASS=$(aws kms decrypt --ciphertext-blob "${FORMS_PASS_CIPHERTEXT}" --output text --query Plaintext --region ${REGION} | base64 -d)
+echo "FORMS_PASS=$FORMS_PASS" >> /root/.env
+
+echo 'HS_POSTGRES_CLIENT_TLS_MODE=verify-ca' >> /root/.env
+echo 'HS_POSTGRES_CLIENT_TLS_ROOT_CERT=global-bundle.pem' >> /root/.env
+
+#Preparation for using AWS Secrets Manager
+#echo 'HS_SECRETS_MANAGER=awssecretsmanager' >> /root/.env
+
+mv /root/.env /opt/hs/*/
+
+FORMS_DIR=`ls /opt/hs/`
+
+cat > /opt/hs/$FORMS_DIR/secrets.yml <<EOL
+FORMS_DB_PASS: !var app-${ENV}/FORMS_DB_PASS
+FORMS_DB_PASS: !var app-${ENV}/FORMS_PASS
+EOL
+
+cd /opt/hs/*/
+./run.sh
